@@ -41,7 +41,7 @@ module PackedStruct
 
       mapped_directives = @directives.map(&:name)
 
-      values.select! { |x| mapped_directives.include?(x[0]) }
+      values = values.select { |x| mapped_directives.include?(x[0]) }
 
       values.sort! do |a, b|
         o = mapped_directives.index(a[0]) <=> mapped_directives.index(b[0])

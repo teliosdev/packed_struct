@@ -23,7 +23,7 @@ module PackedStruct
     #
     # @return [String] the string ready for #pack.
     def to_s
-      @_str ||= directives.map(&:to_s).join(' ')
+      directives.map(&:to_s).join(' ')
     end
 
     alias_method :to_str, :to_s
@@ -41,8 +41,10 @@ module PackedStruct
 
       mapped_directives = @directives.map(&:name)
 
-      values.sort do |a, b|
-        directives.index(a) <=> directives.index(b)
+      values.select! { |x| mapped_directives.include?(x[0]) }
+
+      values.sort! do |a, b|
+        o = mapped_directives.index(a[0]) <=> mapped_directives.index(b[0])
       end
 
       pack_with_array(values.map(&:last))
@@ -116,7 +118,6 @@ module PackedStruct
       if @directives.map(&:name).include?(method) && arguments.length == 0
         @directives.select { |x| x.name == method }.first
       else
-        @_str = nil
         directive = Directive.new(method, *arguments)
         @directives << directive
         directive

@@ -7,10 +7,10 @@ describe PackedStruct::Package do
   its(:directives) { should have(5).items }
 
   it "packs correctly" do
-    subject.pack(:size => 11, :id => 1, :type => 0, :body => "hello world").should == "\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00"
+    subject.pack(:body => "hello world", :size => 11, :packet_id => 1, :packet_type => 0).should == "\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00"
   end
 
   it "unpacks correctly" do
-    subject.unpack("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00").should == { :size => 11, :id => 1, :type => 0, :body => "hello world" }
+    subject.unpack("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00").should == { :size => 11, :packet_id => 1, :packet_type => 0, :body => "hello world" }
   end
 end

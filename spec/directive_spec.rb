@@ -2,7 +2,7 @@ require 'test'
 
 describe PackedStruct::Directive do
 
-  subject { Test.structs[:something].directives.first }
+  subject { Test.structs[:something].directives.first.to_s; Test.structs[:something].directives.first }
 
   its(:name) { should be :size }
   its(:size) { should be 32 }

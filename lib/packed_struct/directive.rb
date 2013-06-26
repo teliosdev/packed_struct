@@ -154,7 +154,7 @@ module PackedStruct
     def size
       case @tags[:size]
       when Directive
-        (@tags[:size].value || 0) + (@tags[:size].tags[:size_modify] || 0)
+        (@tags[:size].value || 0).to_i + (@tags[:size].tags[:size_modify] || 0).to_i
       when Numeric
         @tags[:size]
       when nil

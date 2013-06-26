@@ -133,6 +133,34 @@ module PackedStruct
       dir
     end
 
+    # The number of bytes this takes up in the resulting packed string.
+    #
+    # @return [Numeric]
+    def bytesize
+      case @tags[:type]
+      when nil
+        size / 8
+      when :short
+        2
+      when :int
+        4
+      when :long
+        4
+      when :float
+        if sub_names.include?(:double)
+          8
+        else
+          4
+        end
+      when :null
+        size
+      when :string
+        size
+      else
+        0
+      end
+    end
+
     private
 
     # Returns all of the names of the subs, and caches it.

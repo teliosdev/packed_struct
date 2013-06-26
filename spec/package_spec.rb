@@ -1,4 +1,5 @@
 require 'test'
+require 'stringio'
 
 describe PackedStruct::Package do
   subject { Test.structs[:something] }
@@ -12,5 +13,11 @@ describe PackedStruct::Package do
 
   it "unpacks correctly" do
     subject.unpack("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00").should == { :size => 11, :packet_id => 1, :packet_type => 0, :body => "hello world" }
+  end
+
+  it "unpacks from a socket" do
+    sock = StringIO.new("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00")
+
+    subject.unpack_from_socket(sock).should == { :size => 11, :packet_id => 1, :packet_type => 0, :body => "hello world" }
   end
 end

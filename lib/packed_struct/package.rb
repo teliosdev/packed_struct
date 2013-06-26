@@ -79,6 +79,31 @@ module PackedStruct
         parts[directive.name] = value
       end
 
+
+      directives.each { |x| x.value = nil }
+
+      parts.delete(:null) {}
+      parts
+    end
+    # Unpacks from a socket.
+    #
+    # @param sock [#read] the socket to unpack from.
+    # @return [Hash<Symbol, Object>] the unpacked data.
+    def unpack_from_socket(sock)
+      read  = ""
+      total = ""
+      parts = {}
+
+      directives.each_with_index do |directive, i|
+        total << directive.to_s
+        read << sock.read(directive.bytesize)
+        value = read.unpack(total)[i]
+        directive.value = value
+        parts[directive.name] = value
+      end
+
+      p read
+
       directives.each { |x| x.value = nil }
 
       parts.delete(:null) {}

@@ -11,7 +11,7 @@ Gem::Specification.new do |s|
   s.authors           = [ "Jeremy Rodi" ]
   s.has_rdoc          = false
 
-  s.files             = %w( README.md Rakefile LICENSE )
+  s.files             = %w( README.md LICENSE )
   s.files            += Dir.glob("lib/**/*")
   s.description       = <<desc
   Cleans up the string mess when packing items (in Array#pack) and unpacking items (in String#unpack).

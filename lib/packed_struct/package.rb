@@ -23,7 +23,7 @@ module PackedStruct
     #
     # @return [String] the string ready for #pack.
     def to_s
-      directives.map(&:to_s).join(' ')
+      @_str ||= directives.map(&:to_s).join(' ')
     end
 
     alias_method :to_str, :to_s
@@ -116,6 +116,7 @@ module PackedStruct
       if @directives.map(&:name).include?(method) && arguments.length == 0
         @directives.select { |x| x.name == method }.first
       else
+        @_str = nil
         directive = Directive.new(method, *arguments)
         @directives << directive
         directive

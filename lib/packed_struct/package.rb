@@ -102,8 +102,6 @@ module PackedStruct
         parts[directive.name] = value
       end
 
-      p read
-
       directives.each { |x| x.value = nil }
 
       parts.delete(:null) {}

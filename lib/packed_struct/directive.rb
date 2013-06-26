@@ -153,7 +153,7 @@ module PackedStruct
           4
         end
       when :null
-        size
+        size || 1
       when :string
         size
       else

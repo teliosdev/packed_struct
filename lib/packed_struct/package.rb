@@ -9,7 +9,7 @@ module PackedStruct
     #
     # @return [Array<Directive>]
     def directives
-      @directives.select! { |x| x.parent.nil? }
+      @directives = @directives.select { |x| x.parent.nil? }
       @directives
     end
 

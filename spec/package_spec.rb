@@ -4,20 +4,23 @@ require 'stringio'
 describe PackedStruct::Package do
   subject { Test.structs[:something] }
 
-  its(:to_s) { should == "l< l< l< a0 x" }
-  its(:directives) { should have(5).items }
+  its(:directives) { should have(6).items }
+
+  it "should stringify correctly" do
+    subject.to_s(:size => 0).should == "l< l< l< c a0 x"
+  end
 
   it "packs correctly" do
-    subject.pack(:body => "hello world", :size => 11, :packet_id => 1, :packet_type => 0).should == "\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00"
+    subject.pack(:body => "hello world", :size => 11, :packet_id => 1, :packet_type => 0, :options => 0).should == "\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00hello world\x00"
   end
 
   it "unpacks correctly" do
-    subject.unpack("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00").should == { :size => 11, :packet_id => 1, :packet_type => 0, :body => "hello world" }
+    subject.unpack("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00hello world\x00").should == { :size => 11, :packet_id => 1, :packet_type => 0, :body => "hello world", :options => 0 }
   end
 
   it "unpacks from a socket" do
-    sock = StringIO.new("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00")
+    sock = StringIO.new("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00hello world\x00")
 
-    subject.unpack_from_socket(sock).should == { :size => 11, :packet_id => 1, :packet_type => 0, :body => "hello world" }
+    subject.unpack_from_socket(sock).should == { :size => 11, :packet_id => 1, :packet_type => 0, :body => "hello world", :options => 0 }
   end
 end

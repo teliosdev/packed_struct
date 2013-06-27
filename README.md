@@ -10,6 +10,7 @@ class RconPacket
   include PackedStruct
   struct_layout :packet do
     little_endian signed size[32] # defaults to a number of size 32.
+                                  # also the same as: `little_endian signed long size`
     little_endian signed id[32]
     little_endian signed type[32]
     string body[size]
@@ -30,4 +31,13 @@ You can also unpack strings.
 ```Ruby
 RconPacket.structs[:packet].unpack("\v\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00hello world\x00")
 # => {:size => 11, :id => 1, :type => 0, :body => "hello world"}
+```
+
+From sockets, too.  Anything that responds to `#read`.
+
+```Ruby
+file = File.open("/path/to/some/file", "r")
+
+RconPacket.structs[:packet].unpack_from_socket(file)
+# => ...
 ```

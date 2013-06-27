@@ -9,7 +9,6 @@ module PackedStruct
     #
     # @return [Array<Directive>]
     def directives
-      @directives = @directives.select { |x| x.parent.nil? }
       @directives
     end
 
@@ -21,9 +20,11 @@ module PackedStruct
     # Turn the package into a string.  Uses the directives (calls
     # {Directive#to_s} on them), and joins the result.
     #
+    # @param data [Hash<Symbol, Object>] the data to pass to
+    #   {Directive#to_s}.
     # @return [String] the string ready for #pack.
-    def to_s
-      directives.map(&:to_s).join(' ')
+    def to_s(data = {})
+      directives.map { |x| x.to_s(data) }.join(' ')
     end
 
     alias_method :to_str, :to_s
@@ -31,7 +32,7 @@ module PackedStruct
     # Packs the given data into a string.  The keys of the data
     # correspond to the names of the directives.
     #
-    # @param [Hash<Symbol, Object>] the data.
+    # @param data [Hash<Symbol, Object>] the data.
     # @return [String] the packed data.
     def pack(data)
       values = []
@@ -44,23 +45,11 @@ module PackedStruct
       values = values.select { |x| mapped_directives.include?(x[0]) }
 
       values.sort! do |a, b|
-        o = mapped_directives.index(a[0]) <=> mapped_directives.index(b[0])
+        mapped_directives.index(a[0]) <=> mapped_directives.index(b[0])
       end
 
-      pack_with_array(values.map(&:last))
-    end
-
-    # Packs the directives into a string.  Uses an array.
-    # The parameters can either be an array, or a set of values.
-    #
-    # @return [String]
-    def pack_with_array(*array)
-      array.flatten!
-
-      directives.each_with_index { |e, i| e.value = array[i] }
-      out = array.pack(self.to_s)
-      directives.each { |x| x.value = nil }
-      out
+      ary = values.map(&:last)
+      ary.pack to_s(data)
     end
 
     # Unpacks the given string with the directives.  Returns a hash
@@ -73,18 +62,14 @@ module PackedStruct
       total = ""
       parts = {}
       directives.each_with_index do |directive, i|
-        total << directive.to_s
-        value = string.unpack(total)[i]
-        directive.value = value
-        parts[directive.name] = value
+        total << directive.to_s(parts)
+        parts[directive.name] = string.unpack(total)[i]
       end
-
-
-      directives.each { |x| x.value = nil }
 
       parts.delete(:null) {}
       parts
     end
+
     # Unpacks from a socket.
     #
     # @param sock [#read] the socket to unpack from.
@@ -95,14 +80,10 @@ module PackedStruct
       parts = {}
 
       directives.each_with_index do |directive, i|
-        total << directive.to_s
-        read << sock.read(directive.bytesize)
-        value = read.unpack(total)[i]
-        directive.value = value
-        parts[directive.name] = value
+        total << directive.to_s(parts)
+        read << sock.read(directive.bytesize parts)
+        parts[directive.name] = read.unpack(total)[i]
       end
-
-      directives.each { |x| x.value = nil }
 
       parts.delete(:null) {}
       parts
@@ -126,6 +107,14 @@ module PackedStruct
       parts
     end
 
+    # Finalizes all of the directives.
+    #
+    # @return [void]
+    def finalize_directives!
+      @finalized = true
+      directives.reject!(&:empty?)
+      directives.map(&:finalize!)
+    end
 
     # Inspects the package.
     #
@@ -138,12 +127,11 @@ module PackedStruct
     #
     # @return [Directive] the new directive.
     def method_missing(method, *arguments, &block)
-      if @directives.map(&:name).include?(method) && arguments.length == 0
-        @directives.select { |x| x.name == method }.first
+      super if @finalized
+      if arguments.length == 1 && arguments.first.is_a?(Directive)
+        arguments.first.add_modifier Modifier.new(method)
       else
-        directive = Directive.new(method, *arguments)
-        @directives << directive
-        directive
+        (directives.push Directive.new(method)).last
       end
     end
 

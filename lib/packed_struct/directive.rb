@@ -1,8 +1,6 @@
-module PackedStruct
+require 'set'
 
-  # Contains information about a directive.  A directive can be a name
-  # of the type, the endian(ness) of the type, the type of the type
-  # (short, int, long, etc.), and the signed(ness) of the type.
+module PackedStruct
   class Directive
 
     # The name of the directive.  This is passed as the first value of
@@ -11,249 +9,168 @@ module PackedStruct
     # @return [Symbol]
     attr_reader :name
 
-    # The arguments passed to the directive.
+    # The modifiers for this directive.
     #
-    # @return [Array<Object>]
-    attr_reader :options
+    # @return [Set<Modifier>]
+    attr_reader :modifiers
 
-    # The tags the directive has, such as type, signed(ness),
-    # endian(ness), and size.  Not filled until {#to_s} is called.
+    # Metadata about the directive.  Created when {#finalize!} is
+    # called.
     #
-    # @return [Hash]
-    attr_accessor :tags
-
-    # The children of this directive.  If this directive has a parent,
-    # this is nil.
-    #
-    # @return [nil, Array<Directive>]
-    attr_reader :subs
-
-    # The parent of this directive.  The relationship is such that
-    # +parent.subs.include?(self)+ is true.  If this has a parent, it
-    # is nil.
-    #
-    # @return [nil, Directive]
-    attr_accessor :parent
-
-    # The value this directive holds.  Only for use when packing.
-    #
-    # @return [nil, Object]
-    attr_writer :value
-
-    # @!parse
-    #   attr_reader :value
-    def value
-      @value || (@tags[:original].value if @tags[:original])
-    end
+    # @return [Hash<Symbol, Object>]
+    attr_reader :tags
 
     # Initialize the directive.
     #
     # @param name [Symbol] the name of the directive.
-    def initialize(name, *arguments)
+    # @param package [Package] the package this directive is a part
+    #   of.
+    def initialize(name)
       @name = name
+      @modifiers = []
+      @finalized = true
 
-      @options = arguments
-      @tags    = {}
-      @subs    = []
-      @parent  = nil
-      @value   = nil
-
-      if arguments.first.is_a? Directive
-        arguments.first.add_child(self)
-        @subs = nil
-      end
+      @tags = {
+        :endian     => :native,
+        :signedness => :signed,
+        :size       => nil,
+        :precision  => :single,
+        :size_mod   => 0
+      }
     end
 
-    # Add a child to this (or its parent's) directive.  If this is a
-    # child itself, it adds it to the parent of this.  Invalidates the
-    # caches for {#sub_names} and {#to_s}
+    # Determines whether or not this directive is empty.  It is
+    # considered empty when its tags has all of the default values,
+    # it has no modifiers, and its name is not +:null+.
     #
-    # @param child [Directive] the child to add.
-    # @return [Directive] the child.
-    def add_child(child)
-      if @parent
-        @parent.add_child(child)
-      else
-        @_str = nil
-        @_sub_types = nil
-        @subs << child
-        child.parent = self
-        child
-      end
+    # @return [Boolean]
+    def empty?
+      tags == { :endian => :native, :signedness => :signed,
+        :size => nil, :precision => :single, :size_mod => 0
+      } && modifiers.length == 0 && name != :null
     end
 
-    # Set the size of this directive.
+    # Add a modifier to this directive.
     #
+    # @param mod [Modifier]
     # @return [self]
-    def [](size)
-      @tags[:size] = size
+    def add_modifier(mod)
+      @finalized = false
+      modifiers << mod
       self
     end
 
-    # Turn the directive into a string.  Analyzes the subs before
-    # determining information, then outputs that.  Caches the value
-    # until {#add_child} is next called.
+    # Changes the size of the directive to the given size.  It is
+    # possible for the given value to the a directive; if it is,
+    # it just uses the name of the directive.
     #
-    # @return [String]
-    def to_s
-      return "" unless @subs
-      @subs.compact!
-      @tags[:signed]   = determine_signed
-      @tags[:type]     = determine_type
-      @tags[:endian]   = determine_endian
-      "#{make_directive}#{make_length}"
+    # @param new_size [Numeric, Directive]
+    # @return [self]
+    def [](new_size)
+      if new_size.is_a? Directive
+        tags.merge! new_size.tags_for_sized_directive
+      else
+        tags[:size] = new_size
+      end
+
+      self
     end
 
-    # Inspects the directive.
+    # Returns a hash to be merged into the tags of a directive that
+    # recieved this directive for a size.
     #
-    # @return [String]
-    def inspect
-      "#<#{self.class.name}:#{name}>"
+    # @return [Hash<Symbol, Object>]
+    def tags_for_sized_directive
+      {
+        :size => name,
+        :size_mod => tags[:size_mod]
+      }
     end
 
-    # To show the size of something else, relative to this directive.
+    # Modifies +self+ such that it sizes itself (on {#to_s}ing), and
+    # keeping this size modification in mind.  In other words, this
+    # is meant to be used in another directive's {#[]} method for
+    # telling it what size it should be, and this method modifies that
+    # size by the given amount.
     #
-    # @return [Directive]
+    # @example
+    #   some_directive[another_directive - 5]
+    # @param other [Numeric, #coerce]
+    # @return [self, Object]
     def -(other)
-      dir = dup
-      dir.tags = tags.dup
-      dir.tags[:original   ] = self
-      dir.tags[:size_modify] = -other
-      dir
+      if other.is_a? Numeric
+        tags[:size_mod] = -other
+        self
+      else
+        self_equiv, arg_equiv = other.coerce(self)
+        self_equiv - arg_equiv
+      end
     end
 
-    # To show the size of something else, relative to this directive.
-    #
-    # @return [Directive]
+    # (see #-)
     def +(other)
-      dir = dup
-      dir.tags = tags.dup
-      dir.tags[:original   ] = self
-      dir.tags[:size_modify] = +other
-      dir
+      if other.is_a? Numeric
+        tags[:size_mod] = +other
+        self
+      else
+        self_equiv, arg_equiv = other.coerce(self)
+        self_equiv + arg_equiv
+      end
     end
 
-    # The number of bytes this takes up in the resulting packed string.
+    # Coerces +self+ into a format that can be used with +Numeric+ to
+    # add or subtract from this class.
     #
-    # @return [Numeric]
-    def bytesize
-      case @tags[:type]
-      when nil
-        size / 8
-      when :short
-        2
-      when :int
-        4
-      when :long
-        4
-      when :float
-        if sub_names.include?(:double)
-          8
+    # @example
+    #   some_directive[1 + another_directive]
+    # @param other [Object]
+    # @return [Array<(self, Object)>]
+    def coerce(other)
+      [self, other]
+    end
+
+    # Whether or not this directive has finalized.  It is finalized
+    # until a modifier is added, and then {#finalize!} is required to
+    # finalize the directive.
+    #
+    # @return [Boolean]
+    def finalized?
+      @finalized
+    end
+
+    # Finalizes the directive.
+    #
+    # @return [void]
+    def finalize!
+      return if finalized?
+
+      modifiers.each do |modifier|
+        case modifier.type
+        when :endian, :signedness, :precision, :type, :string_type
+          tags[modifier.type] = modifier.value
+        when :size
+          tags[:size] = modifier.value unless tags[:size]
         else
-          4
+          raise UnknownModifierError,
+            "Unknown modifier: #{modifier.type}"
         end
-      when :null
-        size || 1
-      when :string
-        size
-      else
-        0
       end
+
+      @finalized = true
+      cache_string
     end
 
-    private
-
-    # Returns all of the names of the subs, and caches it.
+    # Turn the directive into a string, with the given data.  It
+    # shouldn't need the data unless +tags[:size]+ is a Symbol.
     #
-    # @param force [Boolean] force reloading the names of the subs.
-    # @return [Array<Symbol>]
-    def sub_names(force = false)
-      if @_sub_types && !force
-        @_sub_types
-      else
-        @subs.map(&:name) + [@name]
-      end
-    end
+    # @param data [Hash<Symbol, Object>] the data that may be used for
+    #   the length.
+    # @return [String]
+    def to_s(data = {})
+      return @_cache if !tags[:size].is_a?(Symbol) && @_cache
+      return "x" * (tags[:size] || 1) if name == :null
 
-    # Determines the size of the directive by checking if it's in the
-    # tags, or by searching the subs.
-    #
-    # @return [Numeric]
-    def size
-      case @tags[:size]
-      when Directive
-        (@tags[:size].value || 0).to_i + (@tags[:size].tags[:size_modify] || 0).to_i
-      when Numeric
-        @tags[:size]
-      when nil
-        @subs.select { |s| s && s.tags[:size] }.map { |s| s.tags[:size] }.last
-      end
-    end
-
-    # Determine the type of this directive.  Uses {#sub_names} to
-    # search for matching types.  Defaults to +nil+.
-    #
-    # @return [nil, Symbol] the return value can be any of +:short+,
-    #   +:int+, +:long+, +:string+, +:float+, or +nil+.
-    def determine_type
-      case true
-      when sub_names.include?(:short)
-        :short
-      when sub_names.include?(:int)
-        :int
-      when sub_names.include?(:long)
-        :long
-      when sub_names.include?(:char), sub_names.include?(:string)
-        :string
-      when sub_names.include?(:float)
-        :float
-      when sub_names.include?(:null)
-        :null
-      else
-        nil
-      end
-    end
-
-    # Determines the endianness of this directive.  Uses {#sub_names}
-    # to search for matching names.  Defaults to +:native+.
-    #
-    # @return [Symbol] the return value can be any of +:little+,
-    #   +:big+, or +:native+.
-    def determine_endian
-      case true
-      when sub_names.include?(:little), sub_names.include?(:little_endian),
-        sub_names.include?(:lsb), sub_names.include?(:low)
-        :little
-      when sub_names.include?(:big), sub_names.include?(:big_endian),
-        sub_names.include?(:msb), sub_names.include?(:high),
-        sub_names.include?(:network)
-        :big
-      else
-        :native
-      end
-    end
-
-    # Determines the signedness of this directive.  Uses {#sub_names}
-    # to search for matching names.  Defaults to +:signed+.
-    #
-    # @return [Symbol] the return value can be any of +:unsigned+ or
-    #   +:signed+.
-    def determine_signed
-      if sub_names.include?(:unsigned) && !sub_names.include?(:null)
-        :unsigned
-      else
-        :signed
-      end
-    end
-
-    # Determines the directive to be used in the pack string, using
-    # the type from {#determine_type} to manage it.
-    #
-    # @return [String] the directive for the pack string.
-    def make_directive
-      case @tags[:type]
-      when nil
-        handle_nil_type
+      out = case tags[:type]
       when :short
         modify_if_needed "S"
       when :int
@@ -264,119 +181,185 @@ module PackedStruct
         handle_string_type
       when :float
         handle_float_type
-      when :null
-        "x" * (size || 1)
+      when nil
+        handle_empty_type
       else
         nil
       end
+
+      if tags[:size].is_a? Symbol
+        out << data.fetch(tags[:size]).to_s
+      elsif tags[:size] && ![:null, nil].include?(tags[:type])
+        out << tags[:size].to_s
+      end
+
+      out
     end
 
-    # Determines the length to be added to the pack string.
+    # The number of bytes a type takes up in the string.
+    BYTES_IN_STRING = {
+      :char  => [0].pack("c").bytesize,
+      :short => [0].pack("s").bytesize,
+      :int   => [0].pack("i").bytesize,
+      :long  => [0].pack("l").bytesize,
+      :float_single => [0].pack("f").bytesize,
+      :float_double => [0].pack("D").bytesize,
+    }
+
+    # The number of bytes this takes up in the resulting packed string.
     #
-    # @return [String]
-    def make_length
-      if size && ![:null, nil].include?(@tags[:type])
-        size.to_s
+    # @param (see #to_s)
+    # @return [Numeric]
+    def bytesize(data = {})
+      case tags[:type]
+      when nil
+        (size(data) || 8) / 8
+      when :short, :int, :long
+        BYTES_IN_STRING.fetch tags[:type]
+      when :float
+        if tags[:precision] == :double
+          BYTES_IN_STRING[:float_double]
+        else
+          BYTES_IN_STRING[:float_single]
+        end
+      when :null
+        size(data) || 1
+      when :string
+        size(data)
       else
-        ""
+        0
       end
     end
 
-    # Handles the nil type.  Uses the size to match the type with
-    # the directive.
+    # The size of this directive.
+    #
+    # @param (see #to_s)
+    # @return [nil, Numeric]
+    def size(data = {})
+      if tags[:size].is_a? Symbol
+        data.fetch(tags[:size])
+      else
+        tags[:size]
+      end
+    end
+
+    private
+
+    # Tries to cache the string value of this directive.  It cannot if
+    # +tags[:size]+ is a Symbol, since it depends on the value of the
+    # directive named by that symbol.
     #
     # @return [String]
-    def handle_nil_type
+    def cache_string
+      return if tags[:size].is_a? Symbol
+      return @_cache = "x" * (tags[:size] || 1) if name == :null
+
+      @_cache = to_s
+    end
+
+    # Handles the type if there is no type, i.e. a type modifier was
+    # not specified.  Can only handle directives with sizes
+    # 0 (default), 8, 16, 32, and 64.
+    #
+    # @see #modify_if_needed
+    # @return [String]
+    def handle_empty_type
       maps = {
+        0  => "x",
         8  => "C",
         16 => "S",
         32 => "L",
         64 => "Q"
       }
 
-      raise StandardError,
-        "Cannot make number of #{size} length" unless
-          maps.keys.include?(size)
-
-      modify_if_needed maps[size]
+      modify_if_needed maps.fetch(tags[:size] || 0), tags[:size] != 8
     end
 
-    # Handles a string type.  If the name of the directive is
-    # +:null+, returns a string containing a number of +x+s (nulls)
-    # exactly equal to the size (or 1, if it doesn't exist).
-    # Otherwise, determines the type of string from the sub names;
-    # types of strings can include +:hex+, +:base64+, +:bit+, or
-    # +:binary+ (defaults to binary).
+    # Handles the type if it is string.  Defaults to a null-padded
+    # string, but if a +:hex+, +:base64+, or +:bit+ modifier is
+    # specified, it will be used.
     #
-    # @return [String]
+    # If +:hex+ is specified, the endianness will be used to determine
+    # which nibble will go first.
+    #
+    # If +:base64+ is specified, the endianness will be used to
+    # determine whether +MSB+ or the +LSB+ will go first.
     def handle_string_type
-
-      case true
-      when sub_names.include?(:hex)
-        modify_if_needed "H"
-      when sub_names.include?(:base64)
+      case tags[:string_type]
+      when :hex
+        modify_for_endianness "H", true
+      when :base64
         "m"
-      when sub_names.include?(:bit)
-        modify_if_needed "B", false
+      when :bit
+        modify_for_endianness "B", true
       else
-        modify_if_needed "A", false
+        modify_for_endianness "a", true
       end
     end
 
-    # Handles float types.  Can handle double- or single- precision
-    # floats, and manage their byte order.
+    # Handles the float type.  Handles the endianness and the
+    # precision, returning the correct character for the float type.
     #
     # @return [String]
     def handle_float_type
-      double = sub_names.include?(:double)
-
-      case @tags[:endian]
-      when :native
-        if double
-          "D"
-        else
-          "F"
-        end
-      when :little
-        if double
-          "E"
-        else
-          "e"
-        end
-      when :big
-        if double
-          "G"
-        else
-          "g"
-        end
+      case [tags[:endian], tags[:precision]]
+      when [:native, :double]
+        "D"
+      when [:native, :single]
+        "F"
+      when [:little, :double]
+        "E"
+      when [:little, :single]
+        "e"
+      when [:big, :double]
+        "G"
+      when [:big, :single]
+        "g"
       end
     end
 
-    # Modifies the given string as needed; it assumes that a lowercase
-    # letter stands for a signed type and the given string stands for
-    # an unsigned type.  It also assumes that "<" added means little
-    # endian, and that ">" added means big endian (and that nothing
-    # added stands for native).
+    # Modifies the given string if it's needed, according to
+    # signness and endianness.  This assumes that a signed
+    # directive should be in lowercase.
     #
-    # @param str [String]
+    # @param str [String] the string to modify.
+    # @param include_endian [Boolean] whether or not to include the
+    #   endianness.
     # @return [String]
     def modify_if_needed(str, include_endian = true)
-      base = if @tags[:signed] == :signed
-        str.downcase
+      base = if @tags[:signedness] == :signed
+        str.swapcase
       else
         str
       end
-
-      base += case @tags[:endian]
-      when :little
-        "<"
-      when :big
-        ">"
+      if include_endian
+        modify_for_endianness(base)
       else
-        ""
-      end if include_endian
+        base
+      end
+    end
 
-      base
+    # Modifies the given string to account for endianness.  If
+    # +use_case+ is true, it modifies the case of the given string to
+    # represent endianness; otherwise, it appends data to the string
+    # to represent endianness.
+    #
+    # @param str [String] the string to modify.
+    # @param use_case [Boolean]
+    # @return [String]
+    def modify_for_endianness(str, use_case = false)
+      case [tags[:endian], use_case]
+      when [:little, true]
+        str.swapcase
+      when [:little, false]
+        str + "<"
+      when [:big, true]
+        str
+      when [:big, false]
+        str + ">"
+      else
+        str
+      end
     end
 
   end

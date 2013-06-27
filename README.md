@@ -1,4 +1,4 @@
-# PackedStruct
+# PackedStruct [![Build Status](https://travis-ci.org/redjazz96/packed_struct.png?branch=master)](https://travis-ci.org/redjazz96/packed_struct)
 
 `PackedStruct` is a way to define packing strings (see [`Array#pack`](http://ruby-doc.org/core-2.0/Array.html#method-i-pack)).
 It was created after @charliesome suggested [a format](https://gist.github.com/redjazz96/6dda0554f62e4f77253a) for defining these strings, but never finished it.

@@ -2,36 +2,43 @@ describe PackedStruct::Modifier do
   context "identifying endians" do
     subject { PackedStruct::Modifier.new(:little_endian) }
 
-    its(:type ) { should be :endian }
-    its(:value) { should be :little }
+    its(:type ) { should eq [:endian] }
+    its(:value) { should eq [:little] }
   end
 
   context "identifying types" do
     subject { PackedStruct::Modifier.new(:int) }
 
-    its(:type ) { should be :type }
-    its(:value) { should be :int  }
+    its(:type ) { should eq [:type] }
+    its(:value) { should eq [:int]  }
   end
 
   context "identifying signedness" do
     subject { PackedStruct::Modifier.new(:unsigned) }
 
-    its(:type ) { should be :signedness }
-    its(:value) { should be :unsigned   }
+    its(:type ) { should eq [:signedness] }
+    its(:value) { should eq [:unsigned]   }
   end
 
   context "identifying null" do
     subject { PackedStruct::Modifier.new(:null) }
 
-    its(:type ) { should be :signedness }
-    its(:value) { should be :signed     }
+    its(:type ) { should eq [:signedness] }
+    its(:value) { should eq [:signed]     }
   end
 
   context "identifying string types" do
     subject { PackedStruct::Modifier.new(:hex) }
 
-    its(:type ) { should be :string_type }
-    its(:value) { should be :hex }
+    its(:type ) { should eq [:string_type] }
+    its(:value) { should eq [:hex] }
+  end
+
+  context "identifying combined types" do
+    subject { PackedStruct::Modifier.new(:uint32) }
+
+    its(:type ) { should eq [:signedness, :size] }
+    its(:value) { should eq [:unsigned,   32   ] }
   end
 
   subject { PackedStruct::Modifier.new(:little_endian) }

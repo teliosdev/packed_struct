@@ -8,27 +8,28 @@ module PackedStruct
       @value = nil
     end
 
-    # The type of modifier it is.  Has three possible values:
-    # +:endian+, +:size+, and +:signedness+.
+    # The type of modifier it is.  Has four possible values:
+    # +:endian+, +:size+, +:length+, +:type+, +:string_type+,
+    # and +:signedness+.
     #
-    # @return [Symbol]
+    # @return [Array<Symbol>]
     # @!parse
     #   attr_reader :type
     def type
       compile! unless @compiled
-      @type
+      [@type].flatten
     end
 
     # The value of the modifier.  Has multiple possible values,
     # including: +:little+, +:big+, +:short+, +:int+, +:long+,
     # +:float+, +:null+, +:string+, +:unsigned+, +:signed+.
     #
-    # @return [Symbol]
+    # @return [Array<Symbol>]
     # @!parse
     #   attr_reader :value
     def value
       compile! unless @compiled
-      @value
+      [@value].flatten
     end
 
     # Compiles the modifier into a usable format.  Stores the values
@@ -64,6 +65,20 @@ module PackedStruct
         when :hex, :base64, :bit
           @type  = :string_type
           @value = @name
+        when :binary
+          @type  = :string_type
+          @value = :bit
+        when /([us]?)int(8|16|32)/
+          @type  = [:signedness, :size]
+          @value = []
+
+          if $1 == "u"
+            @value.push(:unsigned)
+          else
+            @value.push(:signed)
+          end
+
+          @value.push($2.to_i)
         else
           raise UnknownModifierError, "Unkown modifier: #{@name}"
         end

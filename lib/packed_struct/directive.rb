@@ -145,19 +145,29 @@ module PackedStruct
       return if finalized?
 
       modifiers.each do |modifier|
-        case modifier.type
-        when :endian, :signedness, :precision, :type, :string_type
-          tags[modifier.type] = modifier.value
-        when :size
-          tags[:size] = modifier.value unless tags[:size]
-        else
-          raise UnknownModifierError,
-            "Unknown modifier: #{modifier.type}"
+        modifier.type.each_with_index do |type, i|
+          case type
+          when :endian, :signedness, :precision, :type, :string_type
+            tags[type] = modifier.value[i]
+          when :size
+            tags[:size] = modifier.value[i] unless tags[:size]
+          else
+            raise UnknownModifierError,
+              "Unknown modifier: #{type}"
+          end
         end
       end
 
       @finalized = true
       cache_string
+    end
+
+    # Returns whether or not this directive depends on another
+    # directive for its value.
+    #
+    # @return [Boolean]
+    def undefined_size?
+      tags[:size].is_a?(Symbol)
     end
 
     # Turn the directive into a string, with the given data.  It
@@ -167,7 +177,7 @@ module PackedStruct
     #   the length.
     # @return [String]
     def to_s(data = {})
-      return @_cache if !tags[:size].is_a?(Symbol) && @_cache
+      return @_cache unless undefined_size? || !@_cache
       return "x" * (tags[:size] || 1) if name == :null
 
       out = case tags[:type]

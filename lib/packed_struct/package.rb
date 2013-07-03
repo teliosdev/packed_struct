@@ -61,6 +61,7 @@ module PackedStruct
     def unpack(string)
       total = ""
       parts = {}
+
       directives.each_with_index do |directive, i|
         total << directive.to_s(parts)
         parts[directive.name] = string.unpack(total)[i]

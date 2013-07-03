@@ -68,7 +68,10 @@ module PackedStruct
         when :binary
           @type  = :string_type
           @value = :bit
-        when /([us]?)int(8|16|32)/
+        when :uint8, :uint16, :uint32, :sint8, :sint16, :sint32,
+          :int8, :int16, :int32 #/([us]?)int(8|16|32)/
+
+          @name.to_s =~ /([us]?)int(8|16|32)/
           @type  = [:signedness, :size]
           @value = []
 

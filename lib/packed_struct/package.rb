@@ -117,6 +117,13 @@ module PackedStruct
       directives.map(&:finalize!)
     end
 
+    # Checks to see if it has a field with the given name.
+    #
+    # @return [Boolean]
+    def has_field?(field)
+      !!directives.select { |d| d.name == field }.first
+    end
+
     # Inspects the package.
     #
     # @return [String]

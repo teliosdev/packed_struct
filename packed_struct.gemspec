@@ -10,6 +10,7 @@ Gem::Specification.new do |s|
   s.email             = "redjazz96@gmail.com"
   s.authors           = [ "Jeremy Rodi" ]
   s.has_rdoc          = false
+  s.license           = 'MIT'
 
   s.files             = %w( README.md LICENSE )
   s.files            += Dir.glob("lib/**/*")

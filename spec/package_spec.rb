@@ -6,6 +6,11 @@ describe PackedStruct::Package do
 
   its(:directives) { should have(6).items }
 
+  it "returns correct values for has field" do
+    subject.should have_field :size
+    subject.should_not have_field :some_field
+  end
+
   it "should stringify correctly" do
     subject.to_s(:size => 0).should == "l< l< l< c a0 x"
   end

@@ -41,3 +41,7 @@ file = File.open("/path/to/some/file", "r")
 RconPacket.structs[:packet].unpack_from_socket(file)
 # => ...
 ```
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/redjazz96/packed_struct/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+

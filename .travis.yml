@@ -8,4 +8,4 @@ rvm:
   - jruby-19mode
   - ree
 
-script: rspec spec
+script: bundle exec rspec spec
